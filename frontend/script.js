@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Handle Form Submission
         if (donationFormModal) {
-            donationFormModal.addEventListener('submit', (e) => {
+            donationFormModal.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 // ===== VALIDATION START =====
 
@@ -302,40 +302,153 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // ===== VALIDATION END =====
 
-                // Simulate Processing
+                // Show Processing State
                 const originalBtnText = modalSubmitBtn.innerHTML;
                 modalSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
                 modalSubmitBtn.disabled = true;
                 modalSubmitBtn.style.opacity = '0.8';
 
-                setTimeout(() => {
+                try {
+                    // Collect all form data
+                    const donationData = {
+                        donorName: document.getElementById('donor-name')?.value.trim(),
+                        donorEmail: document.getElementById('donor-email')?.value.trim(),
+                        donorPhone: document.getElementById('donor-phone')?.value.trim(),
+                        amount: selectedAmount,
+                        donationType: isMonthly ? 'monthly' : 'onetime',
+                        occasion: document.getElementById('donor-occasion')?.value || 'general',
+                        sevaDate: document.getElementById('donor-date')?.value || null,
+                        dateOfBirth: document.getElementById('donor-dob')?.value || null,
+                        wants80GCertificate: is80G,
+                        wantsMahaPrasadam: isPrasadam,
+                        panNumber: is80G ? panValue : null,
+                        address: isPrasadam ? addressValue : null,
+                        pincode: (is80G || isPrasadam) ? pincodeValue : null,
+                        wantsUpdates: document.querySelector('input[name="updates"]')?.checked || false
+                    };
+
+                    // Check if monthly donation (subscription) or one-time
+                    if (isMonthly) {
+                        // Monthly Donation: Create Subscription
+                        const subscriptionResponse = await fetch(getApiEndpoint('/subscriptions/create'), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(donationData)
+                        });
+
+                        const subscriptionData = await subscriptionResponse.json();
+
+                        if (!subscriptionData.success) {
+                            throw new Error(subscriptionData.message || 'Failed to create subscription');
+                        }
+
+                        // Redirect to Razorpay hosted subscription page for authentication
+                        window.location.href = subscriptionData.shortUrl;
+                        return;
+
+                    } else {
+                        // One-time Donation: Create Order
+                        const orderResponse = await fetch(getApiEndpoint('/donations/create-order'), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(donationData)
+                        });
+
+                        const orderData = await orderResponse.json();
+
+                        if (!orderData.success) {
+                            throw new Error(orderData.message || 'Failed to create order');
+                        }
+
+                        // Step 2: Initialize Razorpay Checkout (One-time payment)
+                        const options = {
+                        key: orderData.key,
+                        amount: orderData.amount,
+                        currency: orderData.currency,
+                        order_id: orderData.orderId,
+                        name: 'Subhojanam',
+                        description: 'Hospital Feeding Donation',
+                        image: 'assests/logo.png',
+                        prefill: {
+                            name: donationData.donorName,
+                            email: donationData.donorEmail,
+                            contact: donationData.donorPhone
+                        },
+                        theme: {
+                            color: '#FF6B35'
+                        },
+                        handler: async function (response) {
+                            // Step 3: Verify Payment
+                            try {
+                                const verifyResponse = await fetch(getApiEndpoint('/donations/verify-payment'), {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify(response)
+                                });
+
+                                const verifyData = await verifyResponse.json();
+
+                                if (verifyData.success) {
+                                    // Payment successful - redirect to thank you page
+                                    const occasionVal = donationData.occasion;
+                                    const dateVal = donationData.sevaDate;
+                                    const amountVal = selectedAmount.toLocaleString('en-IN');
+
+                                    let redirectUrl = `thankyou.html?amount=${amountVal}&txid=${response.razorpay_payment_id}`;
+                                    if (occasionVal && occasionVal !== 'general') {
+                                        redirectUrl += `&occasion=${encodeURIComponent(occasionVal)}`;
+                                    }
+                                    if (dateVal) {
+                                        redirectUrl += `&date=${encodeURIComponent(dateVal)}`;
+                                    }
+
+                                    window.location.href = redirectUrl;
+                                } else {
+                                    alert('Payment verification failed. Please contact support.');
+                                }
+                            } catch (error) {
+                                console.error('Verification error:', error);
+                                alert('Payment verification failed. Please contact support with payment ID: ' + response.razorpay_payment_id);
+                            }
+                        },
+                        modal: {
+                            ondismiss: function() {
+                                // Reset button state when payment modal is closed
+                                modalSubmitBtn.innerHTML = originalBtnText;
+                                modalSubmitBtn.disabled = false;
+                                modalSubmitBtn.style.opacity = '1';
+                            }
+                        }
+                    };
+
+                        // Open Razorpay Checkout
+                        const razorpay = new Razorpay(options);
+                        razorpay.open();
+
+                        // Reset button state after opening Razorpay
+                        modalSubmitBtn.innerHTML = originalBtnText;
+                        modalSubmitBtn.disabled = false;
+                        modalSubmitBtn.style.opacity = '1';
+
+                        // Close donation modal
+                        closeModalFunc();
+                    }
+
+                } catch (error) {
+                    console.error('Donation error:', error);
+                    alert('Failed to process donation: ' + error.message);
+                    
+                    // Reset button state
                     modalSubmitBtn.innerHTML = originalBtnText;
                     modalSubmitBtn.disabled = false;
                     modalSubmitBtn.style.opacity = '1';
-
-                    // Close Donation Modal
-                    closeModalFunc();
-
-                    // Extract values
-                    const occasionVal = document.getElementById('donor-occasion').value;
-                    const dateVal = document.getElementById('donor-date').value;
-                    const amountVal = selectedAmount.toLocaleString('en-IN');
-
-                    // Construct Redirect URL
-                    let redirectUrl = `thankyou.html?amount=${amountVal}`;
-                    if (occasionVal && occasionVal !== 'general') {
-                        redirectUrl += `&occasion=${encodeURIComponent(occasionVal)}`;
-                    }
-                    if (dateVal) {
-                        redirectUrl += `&date=${encodeURIComponent(dateVal)}`;
-                    }
-
-                    // Reset Form
-                    donationFormModal.reset();
-
-                    // Redirect
-                    window.location.href = redirectUrl;
-                }, 1500);
+                }
             });
         }
     }

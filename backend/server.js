@@ -54,6 +54,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/donations', require('./routes/donation'));
+app.use('/api/subscriptions', require('./routes/subscription'));
 app.use('/api/webhook', require('./routes/webhook'));
 
 // 404 handler

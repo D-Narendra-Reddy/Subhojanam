@@ -152,6 +152,43 @@ const donationSchema = new mongoose.Schema({
   deliveryTrackingId: {
     type: String,
     trim: true
+  },
+  
+  // Subscription Fields (for recurring payments)
+  subscriptionId: {
+    type: String,
+    trim: true,
+    sparse: true
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['created', 'authenticated', 'active', 'paused', 'halted', 'cancelled', 'completed', 'expired'],
+    default: null
+  },
+  subscriptionPlanId: {
+    type: String,
+    trim: true
+  },
+  nextBillingDate: {
+    type: Date
+  },
+  totalCycles: {
+    type: Number,
+    default: null  // null means infinite
+  },
+  paidCycles: {
+    type: Number,
+    default: 0
+  },
+  subscriptionStartDate: {
+    type: Date
+  },
+  subscriptionEndDate: {
+    type: Date
+  },
+  parentSubscriptionId: {
+    type: String,
+    trim: true  // Links monthly charge records to original subscription
   }
 }, {
   timestamps: true
@@ -163,6 +200,9 @@ donationSchema.index({ razorpayOrderId: 1 });
 donationSchema.index({ razorpayPaymentId: 1 });
 donationSchema.index({ paymentStatus: 1 });
 donationSchema.index({ createdAt: -1 });
+donationSchema.index({ subscriptionId: 1 });
+donationSchema.index({ subscriptionStatus: 1 });
+donationSchema.index({ parentSubscriptionId: 1 });
 
 // Virtual for calculating number of meals
 donationSchema.virtual('mealsServed').get(function() {

@@ -60,7 +60,12 @@ router.post('/create-order', donationValidation, async (req, res) => {
         donorName,
         donorEmail,
         donorPhone,
-        occasion: occasion || 'general'
+        occasion: occasion || 'general',
+        panNumber: panNumber || 'Not provided',
+        address: address || 'Not provided',
+        pincode: pincode || 'Not provided',
+        wants80GCertificate: wants80GCertificate || false,
+        wantsMahaPrasadam: wantsMahaPrasadam || false
       }
     };
 

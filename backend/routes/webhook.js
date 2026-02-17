@@ -64,6 +64,39 @@ router.post('/razorpay', express.raw({ type: 'application/json' }), async (req, 
         await handleRefundCreated(payload);
         break;
 
+      // Subscription events
+      case 'subscription.authenticated':
+        await handleSubscriptionAuthenticated(payload);
+        break;
+
+      case 'subscription.activated':
+        await handleSubscriptionActivated(payload);
+        break;
+
+      case 'subscription.charged':
+        await handleSubscriptionCharged(payload);
+        break;
+
+      case 'subscription.paused':
+        await handleSubscriptionPaused(payload);
+        break;
+
+      case 'subscription.resumed':
+        await handleSubscriptionResumed(payload);
+        break;
+
+      case 'subscription.cancelled':
+        await handleSubscriptionCancelled(payload);
+        break;
+
+      case 'subscription.completed':
+        await handleSubscriptionCompleted(payload);
+        break;
+
+      case 'subscription.halted':
+        await handleSubscriptionHalted(payload);
+        break;
+
       default:
         console.log(`Unhandled event type: ${eventType}`);
     }
@@ -197,6 +230,198 @@ async function handleRefundCreated(refund) {
     }
   } catch (error) {
     console.error('Error handling refund.created:', error);
+  }
+}
+
+// Handler: Subscription Authenticated (user completed authentication)
+async function handleSubscriptionAuthenticated(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'authenticated'
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`✅ Subscription authenticated: ${subscription.id}`);
+      // TODO: Send welcome email for subscription
+    }
+  } catch (error) {
+    console.error('Error handling subscription.authenticated:', error);
+  }
+}
+
+// Handler: Subscription Activated (first payment successful)
+async function handleSubscriptionActivated(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'active',
+        subscriptionStartDate: new Date(),
+        paidCycles: 1
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`✅ Subscription activated: ${subscription.id}`);
+      // TODO: Send subscription activation confirmation email
+    }
+  } catch (error) {
+    console.error('Error handling subscription.activated:', error);
+  }
+}
+
+// Handler: Subscription Charged (monthly recurring charge)
+async function handleSubscriptionCharged(payment) {
+  try {
+    const subscriptionId = payment.notes?.subscription_id || payment.subscription_id;
+    
+    // Find original subscription donation
+    const originalDonation = await Donation.findOne({ subscriptionId });
+    
+    if (originalDonation) {
+      // Create new donation record for this month's charge
+      const newDonation = new Donation({
+        donorName: originalDonation.donorName,
+        donorEmail: originalDonation.donorEmail,
+        donorPhone: originalDonation.donorPhone,
+        amount: originalDonation.amount,
+        donationType: 'monthly',
+        occasion: originalDonation.occasion,
+        wants80GCertificate: originalDonation.wants80GCertificate,
+        wantsMahaPrasadam: originalDonation.wantsMahaPrasadam,
+        panNumber: originalDonation.panNumber,
+        address: originalDonation.address,
+        pincode: originalDonation.pincode,
+        wantsUpdates: originalDonation.wantsUpdates,
+        razorpayPaymentId: payment.id,
+        paymentStatus: 'captured',
+        paymentMethod: payment.method,
+        capturedAt: new Date(),
+        parentSubscriptionId: subscriptionId,
+        subscriptionId: subscriptionId,
+        paidCycles: originalDonation.paidCycles + 1
+      });
+      
+      await newDonation.save();
+      
+      // Update original record's paid cycles count
+      await Donation.findOneAndUpdate(
+        { subscriptionId },
+        { 
+          $inc: { paidCycles: 1 },
+          nextBillingDate: new Date(payment.created_at * 1000 + 30 * 24 * 60 * 60 * 1000) // ~30 days
+        }
+      );
+      
+      console.log(`✅ Subscription charged: ${subscriptionId}, cycle: ${newDonation.paidCycles}`);
+      // TODO: Send monthly donation receipt email
+    }
+  } catch (error) {
+    console.error('Error handling subscription.charged:', error);
+  }
+}
+
+// Handler: Subscription Paused
+async function handleSubscriptionPaused(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'paused'
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`⏸️  Subscription paused: ${subscription.id}`);
+    }
+  } catch (error) {
+    console.error('Error handling subscription.paused:', error);
+  }
+}
+
+// Handler: Subscription Resumed
+async function handleSubscriptionResumed(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'active'
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`▶️  Subscription resumed: ${subscription.id}`);
+    }
+  } catch (error) {
+    console.error('Error handling subscription.resumed:', error);
+  }
+}
+
+// Handler: Subscription Cancelled
+async function handleSubscriptionCancelled(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'cancelled',
+        subscriptionEndDate: new Date()
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`❌ Subscription cancelled: ${subscription.id}`);
+      // TODO: Send cancellation confirmation email
+    }
+  } catch (error) {
+    console.error('Error handling subscription.cancelled:', error);
+  }
+}
+
+// Handler: Subscription Completed
+async function handleSubscriptionCompleted(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'completed',
+        subscriptionEndDate: new Date()
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`✅ Subscription completed: ${subscription.id}`);
+    }
+  } catch (error) {
+    console.error('Error handling subscription.completed:', error);
+  }
+}
+
+// Handler: Subscription Halted (payment failures)
+async function handleSubscriptionHalted(subscription) {
+  try {
+    const donation = await Donation.findOneAndUpdate(
+      { subscriptionId: subscription.id },
+      {
+        subscriptionStatus: 'halted'
+      },
+      { new: true }
+    );
+
+    if (donation) {
+      console.log(`⚠️  Subscription halted: ${subscription.id}`);
+      // TODO: Send payment failure notification email
+    }
+  } catch (error) {
+    console.error('Error handling subscription.halted:', error);
   }
 }
 
