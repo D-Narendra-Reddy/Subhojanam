@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Subhojanam Backend</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+        .test-box {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            margin-right: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-top: 15px;
+            border-left: 4px solid #667eea;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 4px solid #2196F3;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Subhojanam Backend API Tester</h1>
+
+        <div class="test-box">
+            <h2>1. Health Check</h2>
+            <div class="info">Tests if backend server is running</div>
+            <button onclick="testHealth()">Test Health Endpoint</button>
+            <pre id="health-result">Click button to test...</pre>
+        </div>
+
+        <div class="test-box">
+            <h2>2. Create Donation Order</h2>
+            <div class="info">Creates a test donation order in the database</div>
+            <button onclick="testCreateOrder()">Create Test Order</button>
+            <pre id="order-result">Click button to test...</pre>
+        </div>
+
+        <div class="test-box">
+            <h2>3. Get Statistics</h2>
+            <div class="info">Retrieves donation statistics from database</div>
+            <button onclick="testStats()">Get Stats</button>
+            <pre id="stats-result">Click button to test...</pre>
+        </div>
+
+        <div class="test-box">
+            <h2>4. Full Payment Flow (with Razorpay)</h2>
+            <div class="info">Opens Razorpay checkout - requires backend with valid keys</div>
+            <button onclick="testFullPayment()">Test Complete Flow</button>
+            <pre id="payment-result">Click button to test...</pre>
+        </div>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        // Update this to your backend URL
+        const API_URL = 'http://localhost:5000/api';
+
+        async function testHealth() {
+            const result = document.getElementById('health-result');
+            result.textContent = 'Testing...';
+            
+            try {
+                const response = await fetch('http://localhost:5000/health');
+                const data = await response.json();
+                
+                result.innerHTML = `<span class="status success">✓ SUCCESS</span>\n\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                result.innerHTML = `<span class="status error">✗ ERROR</span>\n\n${error.message}\n\nMake sure backend is running on port 5000`;
+            }
+        }
+
+        async function testCreateOrder() {
+            const result = document.getElementById('order-result');
+            result.textContent = 'Creating test order...';
+            
+            const testData = {
+                donorName: "Test User",
+                donorEmail: "test@example.com",
+                donorPhone: "9876543210",
+                amount: 500,
+                donationType: "onetime",
+                occasion: "general"
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/donations/create-order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    result.innerHTML = `<span class="status success">✓ ORDER CREATED</span>\n\nRequest:\n${JSON.stringify(testData, null, 2)}\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    result.innerHTML = `<span class="status error">✗ FAILED</span>\n\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="status error">✗ ERROR</span>\n\n${error.message}`;
+            }
+        }
+
+        async function testStats() {
+            const result = document.getElementById('stats-result');
+            result.textContent = 'Fetching statistics...';
+            
+            try {
+                const response = await fetch(`${API_URL}/donations/stats/summary`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const stats = data.stats;
+                    result.innerHTML = `<span class="status success">✓ STATS RETRIEVED</span>\n\n` +
+                        `Total Donations: ${stats.totalDonations}\n` +
+                        `Total Amount: ₹${stats.totalAmount.toLocaleString('en-IN')}\n` +
+                        `Average Donation: ₹${Math.round(stats.avgDonation).toLocaleString('en-IN')}\n` +
+                        `Total Meals Served: ${stats.totalMeals.toLocaleString('en-IN')}\n\n` +
+                        `Raw Response:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    result.innerHTML = `<span class="status error">✗ FAILED</span>\n\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="status error">✗ ERROR</span>\n\n${error.message}`;
+            }
+        }
+
+        async function testFullPayment() {
+            const result = document.getElementById('payment-result');
+            result.innerHTML = '<span class="status pending">⏳ PROCESSING</span>\n\nCreating order...';
+            
+            const testData = {
+                donorName: "Test Payment User",
+                donorEmail: "payment@test.com",
+                donorPhone: "9876543210",
+                amount: 500,
+                donationType: "onetime",
+                occasion: "birthday",
+                wants80GCertificate: false,
+                wantsMahaPrasadam: false
+            };
+
+            try {
+                // Step 1: Create Order
+                const response = await fetch(`${API_URL}/donations/create-order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const orderData = await response.json();
+                
+                if (!orderData.success) {
+                    result.innerHTML = `<span class="status error">✗ ORDER FAILED</span>\n\n${JSON.stringify(orderData, null, 2)}`;
+                    return;
+                }
+
+                result.innerHTML = `<span class="status success">✓ ORDER CREATED</span>\n\nOrder ID: ${orderData.orderId}\n\nOpening Razorpay checkout...`;
+
+                // Step 2: Open Razorpay
+                const options = {
+                    key: orderData.key,
+                    amount: orderData.amount,
+                    currency: orderData.currency,
+                    order_id: orderData.orderId,
+                    name: 'Subhojanam Test',
+                    description: 'Test Payment',
+                    handler: async function (response) {
+                        result.innerHTML = `<span class="status pending">⏳ VERIFYING</span>\n\nPayment ID: ${response.razorpay_payment_id}\n\nVerifying payment...`;
+
+                        // Step 3: Verify Payment
+                        try {
+                            const verifyResponse = await fetch(`${API_URL}/donations/verify-payment`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify(response)
+                            });
+
+                            const verifyData = await verifyResponse.json();
+
+                            if (verifyData.success) {
+                                result.innerHTML = `<span class="status success">✓ PAYMENT COMPLETE!</span>\n\n` +
+                                    `Payment ID: ${response.razorpay_payment_id}\n` +
+                                    `Order ID: ${response.razorpay_order_id}\n\n` +
+                                    `Full Response:\n${JSON.stringify(verifyData, null, 2)}`;
+                            } else {
+                                result.innerHTML = `<span class="status error">✗ VERIFICATION FAILED</span>\n\n${JSON.stringify(verifyData, null, 2)}`;
+                            }
+                        } catch (error) {
+                            result.innerHTML = `<span class="status error">✗ VERIFY ERROR</span>\n\n${error.message}`;
+                        }
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            result.innerHTML = '<span class="status error">✗ CANCELLED</span>\n\nPayment was cancelled by user';
+                        }
+                    },
+                    theme: {
+                        color: '#667eea'
+                    }
+                };
+
+                const razorpay = new Razorpay(options);
+                razorpay.open();
+
+            } catch (error) {
+                result.innerHTML = `<span class="status error">✗ ERROR</span>\n\n${error.message}`;
+            }
+        }
+
+        // Auto-run health check on load
+        window.addEventListener('load', () => {
+            setTimeout(testHealth, 500);
+        });
+    </script>
+</body>
+</html>
